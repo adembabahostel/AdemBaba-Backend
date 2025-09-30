@@ -1267,20 +1267,7 @@ app.post(
             student.interviewDate = interviewDateTime;
             await student.save();
 
-            // Fetch welcome documents
-            const welcomeDocs = await WelcomeDocument.find({
-                pdfUrl: { $exists: true, $ne: '' },
-            }).sort({ updatedAt: -1 });
-            const pdfUrls = welcomeDocs.map((doc) => doc.pdfUrl);
-            const pdfLinksHtml = pdfUrls.length
-                ? pdfUrls
-                    .map(
-                        (url, index) =>
-                            `<li><a href="${url}" style="color: #0073bb; text-decoration: none;">📄 Welcome Guide ${index + 1}</a></li>`
-                    )
-                    .join('')
-                : `<li><a href="https://www.dropbox.com/scl/fi/0i4r8x3sr7irlcmez9scd/NEAR-HOSTEL-AGREEMENT.pdf?rlkey=svmwneyiff3pnxq85hh9o6eiu&st=oek0pb71&dl=1" style="color: #0073bb; text-decoration: none;">📄 Welcome Guide</a></li>`;
-
+            
             try {
 
                 await sendEmail(
@@ -1310,12 +1297,12 @@ app.post(
                 await sendEmail(
                     student.email,
                     'Adem Baba – Interview Invitation',
-                    `Hello ${student.name}, your registration has been accepted. You are invited for an interview on ${interviewDateTime.toLocaleString()} at the Adem Baba Hostel Office.`,
+                    `Hello ${student.name}, You are invited for an interview on ${interviewDateTime.toLocaleString()} at the Adem Baba Admin Office.`,
                     `
               <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e2e2; border-radius: 8px;">
                 <h2 style="color: #232f3e;">🎓 Interview Invitation</h2>
                 <p>Hi <strong>${student.name}</strong>,</p>
-                <p>We’re pleased to inform you that your registration has been accepted.</p>
+                <p>We’re pleased to inform you that your registration has been fowarded.</p>
                 <p><strong>You are scheduled for an interview with the following details:</strong></p>
                 <ul style="line-height: 1.6;">
                   <li><strong>Date:</strong> ${interviewDateTime.toLocaleDateString()}</li>
@@ -3656,4 +3643,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`✅ Server running on port ${PORT}`);
 });
+
 
