@@ -1286,25 +1286,19 @@ app.post(
                 await sendEmail(
                     student.email,
                     'Adem Baba – Interview Invitation',
-                    `Hello ${student.name}, your registration has been accepted. You are invited for an interview on ${interviewDateTime.toLocaleString()} at the Adem Baba Hostel Office.`,
+                    `Hello ${student.name},  You are invited for an interview on ${interviewDateTime.toLocaleString()} at the Adem Baba Admin Office.`,
                     `
               <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e2e2; border-radius: 8px;">
                 <h2 style="color: #232f3e;">📅 Interview Scheduled</h2>
                 <p>Hi <strong>${student.name}</strong>,</p>
-                <p>Congratulations! Your registration request has been accepted.</p>
+                <p>congratulation</p>
                 <p>You are invited to attend an in-person interview. Please find the details below:</p>
                 <ul style="line-height: 1.6;">
                   <li><strong>Date:</strong> ${interviewDateTime.toLocaleDateString()}</li>
                   <li><strong>Time:</strong> ${interviewTime}</li>
-                  <li><strong>Location:</strong> Adem Baba Hostel Office</li>
+                  <li><strong>Location:</strong> Adem Baba Hostel (Admin Office) </li>
                 </ul>
-                <p>📎 Download the documents print and fill the necessary information(s):</p>
-                <p>📎 The payment will be made to the hostel account which will be specified by the admin and the slip will be uploaded through the website</p>
-                <p> After you have made the transfer to the account, go to the login page fill in your login details you will be redirected to uplaod the payment slip after the process has completed message the admin and wait for a comfirmation email, then you may procced to your dashobard</p>
-                <p>📎 <strong>NOTE: </strong>All the document listed here should filled printed and taken with you to the interview </p>
-                <ul style="padding-left: 20px; line-height: 1.6;">
-                  ${pdfLinksHtml}
-                </ul>
+                <p>📎 you are required to come along with your school ID CARD/ Admission letter(s):</p>
                 <hr style="margin: 20px 0;" />
                 <p style="font-size: 12px; color: #666;">If you have any questions or are unable to attend, please contact the office as soon as possible.</p>
               </div>
@@ -1330,13 +1324,6 @@ app.post(
                 </ul>
                 
                 <p>Please ensure you arrive a few minutes early and bring any necessary documents.</p>
-                <p>📎 The payment will be made to the hostel account which will be specified by the admin and the slip will be uploaded through the website</p>
-                <p> After you have made the transfer to the account, go to the login page fill in your login details you will be redirected to uplaod the payment slip after the process has completed message the admin and wait for a comfirmation email, then you may procced to your dashobard</p>
-                <p>📎 All the document listed here shoulb filled printed and taken with you to the interview </p>
-                <p>📎 Download the welcome guide(s):</p>
-                <ul style="padding-left: 20px; line-height: 1.6;">
-                  ${pdfLinksHtml}
-                </ul>
                 <hr style="margin: 20px 0;" />
                 <p style="font-size: 12px; color: #666;">If you have any questions or are unable to attend, please notify the office in advance.</p>
               </div>
@@ -3669,3 +3656,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`✅ Server running on port ${PORT}`);
 });
+
