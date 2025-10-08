@@ -10,7 +10,7 @@ import { body, param, validationResult, query } from 'express-validator';
 import multer from 'multer';
 import { CloudinaryStorage } from 'multer-storage-cloudinary'; // NEW: Import Cloudinary storage for Multer
 import { v2 as cloudinary } from 'cloudinary';
-import path from 'path';
+import path from 'path'; 
 import axios from 'axios';
 import stream from 'stream';
 import helmet from'helmet';
@@ -395,16 +395,16 @@ const StudentDocumentSchema = new mongoose.Schema({
     },
     fileUrl: {
       type: String,
-      required: true,
+      required: false,
     },
     publicId: {
       type: String,
-      required: true,
+      required: false,
     },
     fileType: {
       type: String,
       enum: ['image/jpeg', 'image/png'],
-      required: true,
+      required: false,
     },
     uploadedAt: {
       type: Date,
@@ -643,7 +643,6 @@ app.post(
         .if(body('userType').equals('student'))
         .notEmpty().withMessage('Phone number is required for students')
         .matches(/^\+?[\d\s()-]{10,}$/).withMessage('Invalid phone number format'),
-      // NEW: Guardian phone validation
       body('guardianPhone')
         .if(body('userType').equals('student'))
         .notEmpty().withMessage('Guardian phone number is required for students')
@@ -720,6 +719,12 @@ app.post(
         .optional()
         .trim()
         .isLength({ max: 500 }).withMessage('Health comments must not exceed 500 characters'),
+      
+      // NEW: Fees upload toggle validation
+      body('uploadFeesReceipt')
+        .if(body('userType').equals('student'))
+        .isIn(['yes', 'no'])
+        .withMessage('Please specify if you want to upload school fees receipt'),
     ],
     async (req, res) => {
       try {
@@ -736,24 +741,37 @@ app.post(
           adminSecretKey, 
           matricNumber, 
           phone, 
-          guardianPhone, // NEW: Guardian phone
+          guardianPhone,
           gender, 
           dateOfBirth, 
           faculty, 
           level, 
           department, 
-          scoreType, // NEW: Score type
+          scoreType,
           jambScore, 
           cgpa, 
           healthStatus, 
-          healthComments 
+          healthComments,
+          uploadFeesReceipt // NEW: Fees upload toggle value
         } = req.body;
   
-        // Validate file uploads for students - now only fees receipt is required
+        // Validate file uploads for students - fees receipt is now optional based on toggle
         if (userType === 'student') {
           const files = req.files;
-          if (!files.fees) {
-            return res.status(400).json({ error: { message: 'School fees receipt is required', code: 'NO_FILE' } });
+          
+          // Only require fees receipt if user selected "yes"
+          if (uploadFeesReceipt === 'yes' && !files.fees) {
+            return res.status(400).json({ error: { message: 'School fees receipt is required when "Yes" is selected', code: 'NO_FILE' } });
+          }
+          
+          // If user selected "no" but still uploaded a file, ignore it
+          if (uploadFeesReceipt === 'no' && files.fees) {
+            // Clean up the uploaded file since user selected "no"
+            if (files.fees && files.fees[0] && files.fees[0].filename) {
+              await cloudinary.uploader.destroy(files.fees[0].filename, { resource_type: 'image' });
+            }
+            // Remove the file from req.files to prevent processing
+            delete req.files.fees;
           }
         }
   
@@ -838,13 +856,13 @@ app.post(
           ...(userType === 'student' && {
             matricNumber,
             phone,
-            guardianPhone, // NEW: Guardian phone
+            guardianPhone,
             gender,
             dateOfBirth,
             faculty,
             level,
             department,
-            scoreType, // NEW: Score type
+            scoreType,
             jambScore: scoreType === 'jamb' && jambScore ? parseFloat(jambScore) : undefined,
             cgpa: scoreType === 'cgpa' && cgpa ? parseFloat(cgpa) : undefined,
             healthStatus,
@@ -856,14 +874,14 @@ app.post(
           }),
         });
   
-        // Handle document uploads for students only - now only fees receipt
+        // Handle document uploads for students only - fees receipt is now optional
         let documents = [];
         if (userType === 'student') {
           const files = req.files;
           
           try {
-            // Only upload fees receipt
-            if (files.fees && files.fees[0]) {
+            // Only upload fees receipt if user selected "yes" and file exists
+            if (uploadFeesReceipt === 'yes' && files.fees && files.fees[0]) {
               const feesDoc = new StudentDocument({
                 student: user._id,
                 documentType: 'FEES',
@@ -909,7 +927,7 @@ app.post(
               <p><strong>Score Value:</strong> ${scoreType === 'jamb' ? jambScore : cgpa}</p>
               <p><strong>Guardian Phone:</strong> ${guardianPhone}</p>
               <p><strong>Health Status:</strong> ${healthStatus}</p>
-              <p><strong>Documents Uploaded:</strong> School Fees Receipt</p>
+              <p><strong>Fees Receipt Uploaded:</strong> ${uploadFeesReceipt === 'yes' ? 'Yes' : 'No'}</p>
               <p><a href="${frontend}/admin/student-documents" style="display: inline-block; background-color: #0073bb; color: white; padding: 10px 16px; border-radius: 6px; text-decoration: none;">Review Application</a></p>
               <hr style="margin: 20px 0;" />
               <p style="font-size: 12px; color: #666;">Please take appropriate action in the Admin Dashboard.</p>
@@ -953,7 +971,7 @@ app.post(
 
 // Generate OTP (Admin)
 app.post( 
-    '/api/students/generate-otp',
+    '/api/students/generate-otp', 
     verifyToken,
     isAdmin,
     [body('studentId').isMongoId().withMessage('Invalid student ID')],
@@ -1416,12 +1434,11 @@ app.post(
                 await sendEmail(
                     student.email,
                     'Adem Baba – Interview Invitation',
-                    `Hello ${student.name}, your registration has been accepted. You are invited for an interview on ${interviewDateTime.toLocaleString()} at the Adem Baba Hostel Office.`,
+                    `Hello ${student.name}, your registration has been Forwarded. You are invited for an interview on ${interviewDateTime.toLocaleString()} at the Adem Baba Hostel Office.`,
                     `
               <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e2e2; border-radius: 8px;">
                 <h2 style="color: #232f3e;">🎓 Interview Invitation</h2>
                 <p>Hi <strong>${student.name}</strong>,</p>
-                <p>We’re pleased to inform you that your registration has been accepted.</p>
                 <p><strong>You are scheduled for an interview with the following details:</strong></p>
                 <ul style="line-height: 1.6;">
                   <li><strong>Date:</strong> ${interviewDateTime.toLocaleDateString()}</li>
