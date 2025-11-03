@@ -10,11 +10,11 @@ import { body, param, validationResult, query } from 'express-validator';
 import multer from 'multer';
 import { CloudinaryStorage } from 'multer-storage-cloudinary'; // NEW: Import Cloudinary storage for Multer
 import { v2 as cloudinary } from 'cloudinary';
-import path from 'path'; 
+import path from 'path';
 import axios from 'axios';
 import stream from 'stream';
-import helmet from'helmet';
-import ratelimit from'express-rate-limit';
+import helmet from 'helmet';
+import ratelimit from 'express-rate-limit';
 
 dotenv.config();
 // Validate environment variables
@@ -39,7 +39,7 @@ for (const env of requiredEnv) {
 const frontend = process.env.FRONTEND_URL;
 
 
-const app = express(); 
+const app = express();
 app.set('trust proxy', 1);
 
 app.use(helmet());
@@ -106,42 +106,42 @@ const upload = multer({
 const documentStorage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: (req, file) => {
-      let folder;
-      if (file.fieldname === 'jambOrCgpa') {
-        folder = req.body.jambOrCgpaType === 'JAMB_RESULT' ? 'jamb_result' : 'cgpa';
-      } else if (file.fieldname === 'admissionLetter') {
-        folder = 'admission_letter';
-      } else if (file.fieldname === 'fees') {
-        folder = 'fees';
-      }
-      return {
-        folder: `adem_baba/documents/${folder}`,
-        allowed_formats: ['jpeg', 'jpg', 'png'],
-        resource_type: 'image',
-      };
+        let folder;
+        if (file.fieldname === 'jambOrCgpa') {
+            folder = req.body.jambOrCgpaType === 'JAMB_RESULT' ? 'jamb_result' : 'cgpa';
+        } else if (file.fieldname === 'admissionLetter') {
+            folder = 'admission_letter';
+        } else if (file.fieldname === 'fees') {
+            folder = 'fees';
+        }
+        return {
+            folder: `adem_baba/documents/${folder}`,
+            allowed_formats: ['jpeg', 'jpg', 'png'],
+            resource_type: 'image',
+        };
     },
-  });
-  
-  const documentFileFilter = (req, file, cb) => {
+});
+
+const documentFileFilter = (req, file, cb) => {
     const filetypes = /jpeg|jpg|png/;
     const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = filetypes.test(file.mimetype);
     if (extname && mimetype) {
-      cb(null, true);
+        cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPEG and PNG allowed.'), false);
+        cb(new Error('Invalid file type. Only JPEG and PNG allowed.'), false);
     }
-  };
-  
-  const uploadDocuments = multer({
+};
+
+const uploadDocuments = multer({
     storage: documentStorage,
     fileFilter: documentFileFilter,
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  }).fields([
+}).fields([
     { name: 'jambOrCgpa', maxCount: 1 },
     { name: 'admissionLetter', maxCount: 1 },
     { name: 'fees', maxCount: 1 },
-  ]);
+]);
 
 
 // MongoDB Connection
@@ -162,13 +162,31 @@ const UserSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true, index: true, lowercase: true },
     password: { type: String, required: true },
     userType: { type: String, enum: ['admin', 'student'], required: true },
+
+    // NEW: ID type field to track whether student used matric or JAMB number
+    idType: {
+        type: String,
+        enum: ['matric', 'jamb'],
+        required: function () { return this.userType === 'student'; }
+    },
+
     matricNumber: {
         type: String,
         unique: true,
         sparse: true,
         match: [/^\d{2}\/[A-Z0-9]{6}\/\d{3}$/, 'Invalid matric number format (e.g., 23/208CSE/786)'],
-        required: function () { return this.userType === 'student'; }
+        required: function () { return this.userType === 'student' && this.idType === 'matric'; }
     },
+
+    // NEW: JAMB registration number field
+    jambRegNumber: {
+        type: String,
+        unique: true,
+        sparse: true,
+        match: [/^[A-Z0-9]{10,}$/, 'Invalid JAMB registration number format'],
+        required: function () { return this.userType === 'student' && this.idType === 'jamb'; }
+    },
+
     phone: {
         type: String,
         match: /^\+?[\d\s()-]{10,}$/,
@@ -214,16 +232,16 @@ const UserSchema = new mongoose.Schema({
         type: Number,
         min: 0,
         max: 400,
-        required: function() { 
-            return this.userType === 'student' && this.scoreType === 'jamb'; 
+        required: function () {
+            return this.userType === 'student' && this.scoreType === 'jamb';
         }
     },
     cgpa: {
         type: Number,
         min: 0,
         max: 5,
-        required: function() { 
-            return this.userType === 'student' && this.scoreType === 'cgpa'; 
+        required: function () {
+            return this.userType === 'student' && this.scoreType === 'cgpa';
         }
     },
     // NEW: Health status fields
@@ -268,7 +286,6 @@ const UserSchema = new mongoose.Schema({
         publicId: { type: String, default: '' }
     }
 }, { timestamps: true });
-
 
 const RoomSchema = new mongoose.Schema({
     roomNumber: { type: String, required: true, unique: true, index: true },
@@ -383,40 +400,40 @@ WelcomeDocumentSchema.pre('save', function (next) {
 
 const StudentDocumentSchema = new mongoose.Schema({
     student: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-      index: true,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+        index: true,
     },
     documentType: {
-      type: String,
-      enum: ['FEES'],
-      required: true, 
+        type: String,
+        enum: ['FEES', 'ADMISSION'],
+        required: true,
     },
     fileUrl: {
-      type: String,
-      required: false,
+        type: String,
+        required: false,
     },
     publicId: {
-      type: String,
-      required: false,
+        type: String,
+        required: false,
     },
     fileType: {
-      type: String,
-      enum: ['image/jpeg', 'image/png'],
-      required: false,
+        type: String,
+        enum: ['image/jpeg', 'image/png'],
+        required: false,
     },
     uploadedAt: {
-      type: Date,
-      default: Date.now,
+        type: Date,
+        default: Date.now,
     },
 }, { timestamps: true });
 
-  
 
 
 
-const StudentDocument = mongoose.model('StudentDocument', StudentDocumentSchema);  
+
+const StudentDocument = mongoose.model('StudentDocument', StudentDocumentSchema);
 const WelcomeDocument = mongoose.model('WelcomeDocument', WelcomeDocumentSchema);
 const Notification = mongoose.model('Notification', NotificationSchema);
 const RegistrationDeadline = mongoose.model('RegistrationDeadline', RegistrationDeadlineSchema);
@@ -500,19 +517,19 @@ function verifyToken(req, res, next) {
 // Admin Middleware
 function isAdmin(req, res, next) {
     if (!req.user) {
-        return res.status(401).json({ 
-            error: { 
-                message: 'Authentication required. No user found.', 
-                code: 'NO_USER' 
-            } 
+        return res.status(401).json({
+            error: {
+                message: 'Authentication required. No user found.',
+                code: 'NO_USER'
+            }
         });
     }
     if (req.user.userType !== 'admin') {
-        return res.status(403).json({ 
-            error: { 
-                message: 'Access denied. Admins only.', 
-                code: 'ADMIN_ONLY' 
-            } 
+        return res.status(403).json({
+            error: {
+                message: 'Access denied. Admins only.',
+                code: 'ADMIN_ONLY'
+            }
         });
     }
     next();
@@ -620,308 +637,360 @@ app.post(
 );
 
 
-
 app.post(
     '/api/register',
-    uploadDocuments, // Now only uploads fees receipt
+    uploadDocuments, // Handles admission letter upload
     handleMulterError,
     [
-      body('email').isEmail().withMessage('Invalid email format'),
-      body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-      body('name').trim().notEmpty().withMessage('Name is required'),
-      body('userType').isIn(['admin', 'student']).withMessage('Invalid user type'),
-      body('adminSecretKey')
-        .if(body('userType').equals('admin'))
-        .notEmpty().withMessage('Admin secret key is required for admin registration'),
-      
-      // Student-specific validations
-      body('matricNumber')
-        .if(body('userType').equals('student'))
-        .notEmpty().withMessage('Matric number is required for students')
-        .matches(/^\d{2}\/[A-Z0-9]{6}\/\d{3}$/).withMessage('Invalid matric number format (e.g., 23/208CSE/786)'),
-      body('phone')
-        .if(body('userType').equals('student'))
-        .notEmpty().withMessage('Phone number is required for students')
-        .matches(/^\+?[\d\s()-]{10,}$/).withMessage('Invalid phone number format'),
-      body('guardianPhone')
-        .if(body('userType').equals('student'))
-        .notEmpty().withMessage('Guardian phone number is required for students')
-        .matches(/^\+?[\d\s()-]{10,}$/).withMessage('Invalid guardian phone number format'),
-      body('gender')
-        .if(body('userType').equals('student'))
-        .isIn(['Male', 'Female']).withMessage('Invalid gender'),
-      body('dateOfBirth')
-        .if(body('userType').equals('student'))
-        .isISO8601().toDate().withMessage('Invalid date of birth')
-        .custom((value) => {
-          const dob = new Date(value);
-          const today = new Date();
-          if (dob >= today || today.getFullYear() - dob.getFullYear() < 15) {
-            throw new Error('Must be at least 15 years old');
-          }
-          return true;
-        }),
-      body('faculty')
-        .if(body('userType').equals('student'))
-        .trim().notEmpty().withMessage('Faculty is required for students'),
-      body('level')
-        .if(body('userType').equals('student'))
-        .matches(/^(100|200|300|400|500|600|700)level$/).withMessage('Invalid level (e.g., 400level)'),
-      body('department')
-        .if(body('userType').equals('student'))
-        .trim().notEmpty().withMessage('Department is required for students'),
-      
-      // NEW: Score type validation
-      body('scoreType')
-        .if(body('userType').equals('student'))
-        .isIn(['jamb', 'cgpa']).withMessage('Invalid score type'),
-      
-      // JAMB score validation - only for 100-level students with jamb score type
-      body('jambScore')
-        .if(body('userType').equals('student'))
-        .custom((value, { req }) => {
-          if (req.body.scoreType === 'jamb') {
-            if (!value) {
-              throw new Error('JAMB score is required when score type is jamb');
-            }
-            if (parseFloat(value) < 0 || parseFloat(value) > 400) {
-              throw new Error('JAMB score must be between 0 and 400');
-            }
-            // Check if student is 100-level
-            if (req.body.level && req.body.level !== '100level') {
-              throw new Error('JAMB score is only allowed for 100-level students');
-            }
-          }
-          return true;
-        }),
-      
-      // CGPA validation - only for non-100-level students with cgpa score type
-      body('cgpa')
-        .if(body('userType').equals('student'))
-        .custom((value, { req }) => {
-          if (req.body.scoreType === 'cgpa') {
-            if (!value) {
-              throw new Error('CGPA is required when score type is cgpa');
-            }
-            if (parseFloat(value) < 0 || parseFloat(value) > 5) {
-              throw new Error('CGPA must be between 0 and 5');
-            }
-          }
-          return true;
-        }),
-      
-      // NEW: Health status validation
-      body('healthStatus')
-        .if(body('userType').equals('student'))
-        .isIn(['Excellent', 'Good', 'Fair', 'Poor', 'Other']).withMessage('Invalid health status'),
-      body('healthComments')
-        .if(body('userType').equals('student'))
-        .optional()
-        .trim()
-        .isLength({ max: 500 }).withMessage('Health comments must not exceed 500 characters'),
-      
-      // NEW: Fees upload toggle validation
-      body('uploadFeesReceipt')
-        .if(body('userType').equals('student'))
-        .isIn(['yes', 'no'])
-        .withMessage('Please specify if you want to upload school fees receipt'),
+        body('email').isEmail().withMessage('Invalid email format'),
+        body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+        body('name').trim().notEmpty().withMessage('Name is required'),
+        body('userType').isIn(['admin', 'student']).withMessage('Invalid user type'),
+        body('adminSecretKey')
+            .if(body('userType').equals('admin'))
+            .notEmpty().withMessage('Admin secret key is required for admin registration'),
+
+        // Student-specific validations
+        body('idType')
+            .if(body('userType').equals('student'))
+            .isIn(['matric', 'jamb']).withMessage('Invalid ID type'),
+
+        // Matric number validation - required only if idType is matric
+        body('matricNumber')
+            .if(body('userType').equals('student'))
+            .custom((value, { req }) => {
+                if (req.body.idType === 'matric') {
+                    if (!value) {
+                        throw new Error('Matric number is required when ID type is matric');
+                    }
+                    if (!/^\d{2}\/[A-Z0-9]{6}\/\d{3}$/.test(value)) {
+                        throw new Error('Invalid matric number format (e.g., 23/208CSE/786)');
+                    }
+                }
+                return true;
+            }),
+
+        // JAMB registration number validation - required only if idType is jamb
+        body('jambRegNumber')
+            .if(body('userType').equals('student'))
+            .custom((value, { req }) => {
+                if (req.body.idType === 'jamb') {
+                    if (!value) {
+                        throw new Error('JAMB registration number is required when ID type is jamb');
+                    }
+                    if (!/^[A-Z0-9]{10,}$/.test(value)) {
+                        throw new Error('Invalid JAMB registration number format');
+                    }
+                }
+                return true;
+            }),
+
+        body('phone')
+            .if(body('userType').equals('student'))
+            .notEmpty().withMessage('Phone number is required for students')
+            .matches(/^\+?[\d\s()-]{10,}$/).withMessage('Invalid phone number format'),
+        body('guardianPhone')
+            .if(body('userType').equals('student'))
+            .notEmpty().withMessage('Guardian phone number is required for students')
+            .matches(/^\+?[\d\s()-]{10,}$/).withMessage('Invalid guardian phone number format'),
+        body('gender')
+            .if(body('userType').equals('student'))
+            .isIn(['Male', 'Female']).withMessage('Invalid gender'),
+        body('dateOfBirth')
+            .if(body('userType').equals('student'))
+            .isISO8601().toDate().withMessage('Invalid date of birth')
+            .custom((value) => {
+                const dob = new Date(value);
+                const today = new Date();
+                if (dob >= today || today.getFullYear() - dob.getFullYear() < 15) {
+                    throw new Error('Must be at least 15 years old');
+                }
+                return true;
+            }),
+        body('faculty')
+            .if(body('userType').equals('student'))
+            .trim().notEmpty().withMessage('Faculty is required for students'),
+        body('level')
+            .if(body('userType').equals('student'))
+            .matches(/^(100|200|300|400|500|600|700)level$/).withMessage('Invalid level (e.g., 400level)'),
+        body('department')
+            .if(body('userType').equals('student'))
+            .trim().notEmpty().withMessage('Department is required for students'),
+
+        // Score type validation
+        body('scoreType')
+            .if(body('userType').equals('student'))
+            .isIn(['jamb', 'cgpa']).withMessage('Invalid score type'),
+
+        // JAMB score validation - only for 100-level students with jamb score type
+        body('jambScore')
+            .if(body('userType').equals('student'))
+            .custom((value, { req }) => {
+                if (req.body.scoreType === 'jamb') {
+                    if (!value) {
+                        throw new Error('JAMB score is required when score type is jamb');
+                    }
+                    if (parseFloat(value) < 0 || parseFloat(value) > 400) {
+                        throw new Error('JAMB score must be between 0 and 400');
+                    }
+                    // Check if student is 100-level
+                    if (req.body.level && req.body.level !== '100level') {
+                        throw new Error('JAMB score is only allowed for 100-level students');
+                    }
+                }
+                return true;
+            }),
+
+        // Health status validation
+        body('healthStatus')
+            .if(body('userType').equals('student'))
+            .isIn(['Excellent', 'Good', 'Fair', 'Poor', 'Other']).withMessage('Invalid health status'),
+        body('healthComments')
+            .if(body('userType').equals('student'))
+            .optional()
+            .trim()
+            .isLength({ max: 500 }).withMessage('Health comments must not exceed 500 characters'),
+
+        // Fees upload toggle validation
+        body('uploadFeesReceipt')
+            .if(body('userType').equals('student'))
+            .isIn(['yes', 'no'])
+            .withMessage('Please specify if you want to upload school fees receipt'),
     ],
     async (req, res) => {
-      try {
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-          return res.status(400).json({ error: { message: 'Validation failed', details: errors.array(), code: 'VALIDATION_ERROR' } });
-        }
-  
-        const { 
-          email, 
-          password, 
-          userType, 
-          name, 
-          adminSecretKey, 
-          matricNumber, 
-          phone, 
-          guardianPhone,
-          gender, 
-          dateOfBirth, 
-          faculty, 
-          level, 
-          department, 
-          scoreType,
-          jambScore, 
-          cgpa, 
-          healthStatus, 
-          healthComments,
-          uploadFeesReceipt // NEW: Fees upload toggle value
-        } = req.body;
-  
-        // Validate file uploads for students - fees receipt is now optional based on toggle
-        if (userType === 'student') {
-          const files = req.files;
-          
-          // Only require fees receipt if user selected "yes"
-          if (uploadFeesReceipt === 'yes' && !files.fees) {
-            return res.status(400).json({ error: { message: 'School fees receipt is required when "Yes" is selected', code: 'NO_FILE' } });
-          }
-          
-          // If user selected "no" but still uploaded a file, ignore it
-          if (uploadFeesReceipt === 'no' && files.fees) {
-            // Clean up the uploaded file since user selected "no"
-            if (files.fees && files.fees[0] && files.fees[0].filename) {
-              await cloudinary.uploader.destroy(files.fees[0].filename, { resource_type: 'image' });
+        try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({ error: { message: 'Validation failed', details: errors.array(), code: 'VALIDATION_ERROR' } });
             }
-            // Remove the file from req.files to prevent processing
-            delete req.files.fees;
-          }
-        }
-  
-        // Check registration deadline for students
-        if (userType === 'student') {
-          const deadline = await RegistrationDeadline.findOne();
-          const now = new Date();
-  
-          if (deadline) {
-            const currentDeadline = deadline.extended && deadline.extendedDeadline ? deadline.extendedDeadline : deadline.deadline;
-            if (now > currentDeadline) {
-              return res.status(403).json({
-                error: {
-                  message: 'The Adem Baba Hostel has closed the page for booking hostel.',
-                  code: 'REGISTRATION_CLOSED',
-                  deadline: currentDeadline,
-                },
-              });
+
+            const {
+                email,
+                password,
+                userType,
+                name,
+                adminSecretKey,
+                idType,
+                matricNumber,
+                jambRegNumber,
+                phone,
+                guardianPhone,
+                gender,
+                dateOfBirth,
+                faculty,
+                level,
+                department,
+                scoreType,
+                jambScore,
+                cgpa,
+                healthStatus,
+                healthComments,
+                uploadFeesReceipt
+            } = req.body;
+
+            // Validate file uploads for students - admission letter is required
+            if (userType === 'student') {
+                const files = req.files;
+
+                // Admission letter is compulsory
+                if (!files.admissionLetter) {
+                    return res.status(400).json({ error: { message: 'Admission letter is required', code: 'NO_ADMISSION_LETTER' } });
+                }
+
+                // Only require fees receipt if user selected "yes"
+                if (uploadFeesReceipt === 'yes' && !files.fees) {
+                    return res.status(400).json({ error: { message: 'School fees receipt is required when "Yes" is selected', code: 'NO_FILE' } });
+                }
+
+                // If user selected "no" but still uploaded a file, ignore it
+                if (uploadFeesReceipt === 'no' && files.fees) {
+                    // Clean up the uploaded file since user selected "no"
+                    if (files.fees && files.fees[0] && files.fees[0].filename) {
+                        await cloudinary.uploader.destroy(files.fees[0].filename, { resource_type: 'image' });
+                    }
+                    // Remove the file from req.files to prevent processing
+                    delete req.files.fees;
+                }
             }
-          } else {
-            return res.status(403).json({
-              error: {
-                message: 'The Adem Baba Hostel has closed the page for booking hostel.',
-                code: 'NO_DEADLINE_SET',
-              },
+
+            // Check registration deadline for students
+            if (userType === 'student') {
+                const deadline = await RegistrationDeadline.findOne();
+                const now = new Date();
+
+                if (deadline) {
+                    const currentDeadline = deadline.extended && deadline.extendedDeadline ? deadline.extendedDeadline : deadline.deadline;
+                    if (now > currentDeadline) {
+                        return res.status(403).json({
+                            error: {
+                                message: 'The Adem Baba Hostel has closed the page for booking hostel.',
+                                code: 'REGISTRATION_CLOSED',
+                                deadline: currentDeadline,
+                            },
+                        });
+                    }
+                } else {
+                    return res.status(403).json({
+                        error: {
+                            message: 'The Adem Baba Hostel has closed the page for booking hostel.',
+                            code: 'NO_DEADLINE_SET',
+                        },
+                    });
+                }
+            }
+
+            // Admin-specific checks
+            if (userType === 'admin') {
+                if (adminSecretKey !== process.env.ADMIN_SECRET_KEY) {
+                    return res.status(403).json({
+                        error: {
+                            message: 'Invalid admin secret key. Admin registration is restricted.',
+                            code: 'INVALID_ADMIN_KEY',
+                        },
+                    });
+                }
+
+                const adminCount = await User.countDocuments({ userType: 'admin' });
+                if (adminCount >= 2) {
+                    return res.status(403).json({
+                        error: {
+                            message: 'Maximum number of admin accounts (2) has been reached.',
+                            code: 'ADMIN_LIMIT_EXCEEDED',
+                        },
+                    });
+                }
+            }
+
+            // Check for existing user
+            let existingUser;
+            if (userType === 'student') {
+                // Check based on ID type
+                const query = { email };
+                if (idType === 'matric') {
+                    query.matricNumber = matricNumber;
+                } else {
+                    query.jambRegNumber = jambRegNumber;
+                }
+
+                existingUser = await User.findOne({
+                    $or: [
+                        { email },
+                        idType === 'matric' ? { matricNumber } : { jambRegNumber }
+                    ]
+                });
+            } else {
+                existingUser = await User.findOne({ email });
+            }
+
+            if (existingUser) {
+                return res.status(400).json({
+                    error: {
+                        message: userType === 'student'
+                            ? 'Email or ID number already exists'
+                            : 'Email already exists',
+                        code: 'DUPLICATE'
+                    }
+                });
+            }
+
+            // Hash password
+            const hashedPassword = await bcrypt.hash(password, 10);
+
+            // Create user with new fields
+            const user = new User({
+                name,
+                email,
+                password: hashedPassword,
+                userType,
+                ...(userType === 'student' && {
+                    idType,
+                    matricNumber: idType === 'matric' ? matricNumber : undefined,
+                    jambRegNumber: idType === 'jamb' ? jambRegNumber : undefined,
+                    phone,
+                    guardianPhone,
+                    gender,
+                    dateOfBirth,
+                    faculty,
+                    level,
+                    department,
+                    scoreType,
+                    jambScore: scoreType === 'jamb' && jambScore ? parseFloat(jambScore) : undefined,
+                    cgpa: scoreType === 'cgpa' && cgpa ? parseFloat(cgpa) : undefined,
+                    healthStatus,
+                    healthComments,
+                    status: 'Pending',
+                }),
+                ...(userType === 'admin' && {
+                    status: 'Approved',
+                }),
             });
-          }
-        }
-  
-        // Admin-specific checks
-        if (userType === 'admin') {
-          if (adminSecretKey !== process.env.ADMIN_SECRET_KEY) {
-            return res.status(403).json({
-              error: {
-                message: 'Invalid admin secret key. Admin registration is restricted.',
-                code: 'INVALID_ADMIN_KEY',
-              },
-            });
-          }
-  
-          const adminCount = await User.countDocuments({ userType: 'admin' });
-          if (adminCount >= 2) {
-            return res.status(403).json({
-              error: {
-                message: 'Maximum number of admin accounts (2) has been reached.',
-                code: 'ADMIN_LIMIT_EXCEEDED',
-              },
-            });
-          }
-        }
-  
-        // Check for existing user
-        let existingUser;
-        if (userType === 'student') {
-          existingUser = await User.findOne({ 
-            $or: [{ email }, { matricNumber }] 
-          });
-        } else {
-          existingUser = await User.findOne({ email });
-        }
-        
-        if (existingUser) {
-          return res.status(400).json({ 
-            error: { 
-              message: userType === 'student' 
-                ? 'Email or matric number already exists' 
-                : 'Email already exists', 
-              code: 'DUPLICATE' 
-            } 
-          });
-        }
-  
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
-  
-        // Create user with new fields
-        const user = new User({
-          name,
-          email,
-          password: hashedPassword,
-          userType,
-          ...(userType === 'student' && {
-            matricNumber,
-            phone,
-            guardianPhone,
-            gender,
-            dateOfBirth,
-            faculty,
-            level,
-            department,
-            scoreType,
-            jambScore: scoreType === 'jamb' && jambScore ? parseFloat(jambScore) : undefined,
-            cgpa: scoreType === 'cgpa' && cgpa ? parseFloat(cgpa) : undefined,
-            healthStatus,
-            healthComments,
-            status: 'Pending',
-          }),
-          ...(userType === 'admin' && {
-            status: 'Approved',
-          }),
-        });
-  
-        // Handle document uploads for students only - fees receipt is now optional
-        let documents = [];
-        if (userType === 'student') {
-          const files = req.files;
-          
-          try {
-            // Only upload fees receipt if user selected "yes" and file exists
-            if (uploadFeesReceipt === 'yes' && files.fees && files.fees[0]) {
-              const feesDoc = new StudentDocument({
-                student: user._id,
-                documentType: 'FEES',
-                fileUrl: files.fees[0].path,
-                publicId: files.fees[0].filename,
-                fileType: files.fees[0].mimetype,
-              });
-              await feesDoc.save();
-              documents.push(feesDoc);
+
+            // Handle document uploads for students only
+            let documents = [];
+            if (userType === 'student') {
+                const files = req.files;
+
+                try {
+                    // Upload admission letter (compulsory)
+                    if (files.admissionLetter && files.admissionLetter[0]) {
+                        const admissionDoc = new StudentDocument({
+                            student: user._id,
+                            documentType: 'ADMISSION',
+                            fileUrl: files.admissionLetter[0].path,
+                            publicId: files.admissionLetter[0].filename,
+                            fileType: files.admissionLetter[0].mimetype,
+                        });
+                        await admissionDoc.save();
+                        documents.push(admissionDoc);
+                    }
+
+                    // Only upload fees receipt if user selected "yes" and file exists
+                    if (uploadFeesReceipt === 'yes' && files.fees && files.fees[0]) {
+                        const feesDoc = new StudentDocument({
+                            student: user._id,
+                            documentType: 'FEES',
+                            fileUrl: files.fees[0].path,
+                            publicId: files.fees[0].filename,
+                            fileType: files.fees[0].mimetype,
+                        });
+                        await feesDoc.save();
+                        documents.push(feesDoc);
+                    }
+
+                    user.documents = documents.map(doc => doc._id);
+                } catch (error) {
+                    // Clean up Cloudinary files on error
+                    if (files.admissionLetter && files.admissionLetter[0] && files.admissionLetter[0].filename) {
+                        await cloudinary.uploader.destroy(files.admissionLetter[0].filename, { resource_type: 'image' });
+                    }
+                    if (files.fees && files.fees[0] && files.fees[0].filename) {
+                        await cloudinary.uploader.destroy(files.fees[0].filename, { resource_type: 'image' });
+                    }
+                    throw error;
+                }
             }
-  
-            user.documents = documents.map(doc => doc._id);
-          } catch (error) {
-            // Clean up Cloudinary files on error
-            if (files.fees && files.fees[0] && files.fees[0].filename) {
-              await cloudinary.uploader.destroy(files.fees[0].filename, { resource_type: 'image' });
-            }
-            throw error;
-          }
-        }
-  
-        // Save user
-        await user.save();
-  
-        // Send email notifications
-        if (userType === 'student') {
-          const admins = await User.find({ userType: 'admin' });
-          for (const admin of admins) {
-            const settings = await Settings.findOne({ user: admin._id });
-            if (settings?.notifications.newStudent) {
-              await sendEmail(
-                admin.email,
-                'Student Registration Request – Approval Needed',
-                `A new student named ${name} (${email}) with Matric Number ${matricNumber} has submitted a registration request and is awaiting your approval.`,
-                `
+
+            // Save user
+            await user.save();
+
+            // Send email notifications
+            if (userType === 'student') {
+                const admins = await User.find({ userType: 'admin' });
+                for (const admin of admins) {
+                    const settings = await Settings.findOne({ user: admin._id });
+                    if (settings?.notifications.newStudent) {
+                        const idDisplay = idType === 'matric' ? `Matric Number: ${matricNumber}` : `JAMB Reg Number: ${jambRegNumber}`;
+
+                        await sendEmail(
+                            admin.email,
+                            'Student Registration Request – Approval Needed',
+                            `A new student named ${name} (${email}) with ${idDisplay} has submitted a registration request and is awaiting your approval.`,
+                            `
           <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e2e2; border-radius: 8px;">
               <h2 style="color: #232f3e;">📌 New Student Registration Request</h2>
               <p><strong>Student:</strong> ${name}</p>
               <p><strong>Email:</strong> ${email}</p>
-              <p><strong>Matric Number:</strong> ${matricNumber}</p>
+              <p><strong>${idType === 'matric' ? 'Matric Number' : 'JAMB Reg Number'}:</strong> ${idType === 'matric' ? matricNumber : jambRegNumber}</p>
               <p><strong>Level:</strong> ${level}</p>
               <p><strong>Score Type:</strong> ${scoreType === 'jamb' ? 'JAMB Score' : 'CGPA'}</p>
               <p><strong>Score Value:</strong> ${scoreType === 'jamb' ? jambScore : cgpa}</p>
@@ -933,15 +1002,15 @@ app.post(
               <p style="font-size: 12px; color: #666;">Please take appropriate action in the Admin Dashboard.</p>
           </div>
           `
-              ).catch((emailError) => console.error('Email failed for', admin.email, emailError));
-            }
-          }
-        } else {
-          await sendEmail(
-            email,
-            'Welcome to Adem Baba – Admin Access Granted',
-            `Hello ${name}, you have been successfully registered as an Admin for Adem Baba. Your account is now active.`,
-            `
+                        ).catch((emailError) => console.error('Email failed for', admin.email, emailError));
+                    }
+                }
+            } else {
+                await sendEmail(
+                    email,
+                    'Welcome to Adem Baba – Admin Access Granted',
+                    `Hello ${name}, you have been successfully registered as an Admin for Adem Baba. Your account is now active.`,
+                    `
           <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e2e2; border-radius: 8px;">
               <h2 style="color: #232f3e;">🎉 Welcome to Adem Baba</h2>
               <p>Hi <strong>${name}</strong>,</p>
@@ -951,27 +1020,36 @@ app.post(
               <p style="font-size: 12px; color: #666;">If you have any questions or need help getting started, feel free to contact support.</p>
           </div>
           `
-          ).catch((emailError) => console.error('Email failed for', email, emailError));
+                ).catch((emailError) => console.error('Email failed for', email, emailError));
+            }
+
+            res.status(201).json({ message: 'Registration successful.' });
+        } catch (error) {
+            console.error('❌ Registration Error:', error);
+            // Clean up Cloudinary files on error
+            if (userType === 'student' && req.files) {
+                if (req.files.admissionLetter && req.files.admissionLetter[0]) {
+                    const publicId = req.files.admissionLetter[0]?.filename;
+                    if (publicId) {
+                        await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+                    }
+                }
+                if (req.files.fees && req.files.fees[0]) {
+                    const publicId = req.files.fees[0]?.filename;
+                    if (publicId) {
+                        await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+                    }
+                }
+            }
+            res.status(500).json({ error: { message: 'Failed to register', code: 'SERVER_ERROR', details: error.message } });
         }
-  
-        res.status(201).json({ message: 'Registration successful.' });
-      } catch (error) {
-        console.error('❌ Registration Error:', error);
-        // Clean up Cloudinary files on error
-        if (userType === 'student' && req.files && req.files.fees) {
-          const publicId = req.files.fees[0]?.filename;
-          if (publicId) {
-            await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
-          }
-        }
-        res.status(500).json({ error: { message: 'Failed to register', code: 'SERVER_ERROR', details: error.message } });
-      }
     }
 );
 
+
 // Generate OTP (Admin)
-app.post( 
-    '/api/students/generate-otp', 
+app.post(
+    '/api/students/generate-otp',
     verifyToken,
     isAdmin,
     [body('studentId').isMongoId().withMessage('Invalid student ID')],
@@ -1306,8 +1384,8 @@ app.get('/api/students', verifyToken, isAdmin, async (req, res) => {
             .populate('room', 'roomNumber')
             .sort({ createdAt: -1 })
             .lean();
-        
-        res.json({ 
+
+        res.json({
             success: true,
             students: students,
             count: students.length
@@ -1324,7 +1402,7 @@ app.get('/api/pending-requests', verifyToken, isAdmin, async (req, res) => {
         const requests = await User.find({ userType: 'student', status: 'Pending' })
             .select('name email matricNumber phone guardianPhone gender dateOfBirth faculty level department scoreType jambScore cgpa healthStatus healthComments createdAt status _id interviewDate')
             .lean();
-        
+
         res.json({ requests });
     } catch (error) {
         console.error('❌ Pending Requests Error:', error);
@@ -1400,7 +1478,7 @@ app.post(
                 ? pdfUrls
                     .map(
                         (url, index) =>
-                            `<li><a href="${url}" style="color: #0073bb; text-decoration: none;">📄 Welcome Guide ${index + 1   }</a></li>`
+                            `<li><a href="${url}" style="color: #0073bb; text-decoration: none;">📄 Welcome Guide ${index + 1}</a></li>`
                     )
                     .join('')
                 : `<li><a href="https://www.dropbox.com/scl/fi/0i4r8x3sr7irlcmez9scd/NEAR-HOSTEL-AGREEMENT.pdf?rlkey=svmwneyiff3pnxq85hh9o6eiu&st=oek0pb71&dl=1" style="color: #0073bb; text-decoration: none;">📄 Welcome Guide</a></li>`;
@@ -3033,12 +3111,12 @@ app.post(
         try {
             const errors = validationResult(req);
             if (!errors.isEmpty()) {
-                return res.status(400).json({ 
-                    error: { 
-                        message: 'Validation failed', 
-                        details: errors.array(), 
-                        code: 'VALIDATION_ERROR' 
-                    } 
+                return res.status(400).json({
+                    error: {
+                        message: 'Validation failed',
+                        details: errors.array(),
+                        code: 'VALIDATION_ERROR'
+                    }
                 });
             }
 
@@ -3058,18 +3136,18 @@ app.post(
             });
 
             const savedDeadline = await newDeadline.save();
-            res.json({ 
-                message: 'Registration deadline set successfully', 
-                deadline: savedDeadline 
+            res.json({
+                message: 'Registration deadline set successfully',
+                deadline: savedDeadline
             });
         } catch (error) {
             console.error('❌ Set Deadline Error:', error);
-            res.status(500).json({ 
-                error: { 
-                    message: 'Failed to set deadline', 
-                    code: 'SERVER_ERROR', 
-                    details: error.message 
-                } 
+            res.status(500).json({
+                error: {
+                    message: 'Failed to set deadline',
+                    code: 'SERVER_ERROR',
+                    details: error.message
+                }
             });
         }
     }
@@ -3088,7 +3166,7 @@ app.post(
                 const extendedDeadline = new Date(value);
                 const now = new Date();
                 const currentDeadline = await RegistrationDeadline.findOne({});
-                
+
                 if (!currentDeadline) {
                     throw new Error('No registration deadline found');
                 }
@@ -3105,12 +3183,12 @@ app.post(
         try {
             const errors = validationResult(req);
             if (!errors.isEmpty()) {
-                return res.status(400).json({ 
-                    error: { 
-                        message: 'Validation failed', 
-                        details: errors.array(), 
-                        code: 'VALIDATION_ERROR' 
-                    } 
+                return res.status(400).json({
+                    error: {
+                        message: 'Validation failed',
+                        details: errors.array(),
+                        code: 'VALIDATION_ERROR'
+                    }
                 });
             }
 
@@ -3129,27 +3207,27 @@ app.post(
             );
 
             if (result.matchedCount === 0) {
-                return res.status(404).json({ 
-                    error: { 
-                        message: 'No deadline found to extend', 
-                        code: 'NOT_FOUND' 
-                    } 
+                return res.status(404).json({
+                    error: {
+                        message: 'No deadline found to extend',
+                        code: 'NOT_FOUND'
+                    }
                 });
             }
 
             const updatedDeadline = await RegistrationDeadline.findOne({});
-            res.json({ 
-                message: 'Registration deadline extended successfully', 
-                deadline: updatedDeadline 
+            res.json({
+                message: 'Registration deadline extended successfully',
+                deadline: updatedDeadline
             });
         } catch (error) {
             console.error('❌ Extend Deadline Error:', error);
-            res.status(500).json({ 
-                error: { 
-                    message: 'Failed to extend deadline', 
-                    code: 'SERVER_ERROR', 
-                    details: error.message 
-                } 
+            res.status(500).json({
+                error: {
+                    message: 'Failed to extend deadline',
+                    code: 'SERVER_ERROR',
+                    details: error.message
+                }
             });
         }
     }
@@ -3177,11 +3255,11 @@ app.get(
             });
         } catch (error) {
             console.error('❌ Get Registration Deadline Error:', error);
-            res.status(500).json({ 
-                error: { 
-                    message: 'Failed to get registration deadline', 
-                    code: 'SERVER_ERROR' 
-                } 
+            res.status(500).json({
+                error: {
+                    message: 'Failed to get registration deadline',
+                    code: 'SERVER_ERROR'
+                }
             });
         }
     }
@@ -3654,45 +3732,45 @@ app.delete(
 
 /* CRUD BACKEND STUDENTLINK UPLOAD FOR STUDENTS*/
 // Get all student documents (with optional filters)
-app.get('/api/student-documents',verifyToken, isAdmin, async (req, res) => {
+app.get('/api/student-documents', verifyToken, isAdmin, async (req, res) => {
     try {
-      const { studentId, matricNumber } = req.query;
-      let query = {};
-  
-      if (studentId) {
-        query.student = studentId;
-      } else if (matricNumber) {
-        const student = await User.findOne({ matricNumber });
-        if (!student) {
-          return res.status(404).json({ error: { message: 'Student not found', code: 'NOT_FOUND' } });
+        const { studentId, matricNumber } = req.query;
+        let query = {};
+
+        if (studentId) {
+            query.student = studentId;
+        } else if (matricNumber) {
+            const student = await User.findOne({ matricNumber });
+            if (!student) {
+                return res.status(404).json({ error: { message: 'Student not found', code: 'NOT_FOUND' } });
+            }
+            query.student = student._id;
         }
-        query.student = student._id;
-      }
-  
-      const documents = await StudentDocument.find(query).populate('student', 'name matricNumber email');
-      res.json(documents);
+
+        const documents = await StudentDocument.find(query).populate('student', 'name matricNumber email');
+        res.json(documents);
     } catch (error) {
-      console.error('❌ Error fetching documents:', error);
-      res.status(500).json({ error: { message: 'Failed to fetch documents', code: 'SERVER_ERROR', details: error.message } });
+        console.error('❌ Error fetching documents:', error);
+        res.status(500).json({ error: { message: 'Failed to fetch documents', code: 'SERVER_ERROR', details: error.message } });
     }
 });
-  
 
-  // Get documents for a specific student
-  app.get('/api/student-documents/student/:studentId',verifyToken, isAdmin, async (req, res) => {
+
+// Get documents for a specific student
+app.get('/api/student-documents/student/:studentId', verifyToken, isAdmin, async (req, res) => {
     try {
-      const documents = await StudentDocument.find({ student: req.params.studentId })
-        .populate('student', 'name matricNumber email');
-      if (!documents.length) {
-        return res.status(404).json({ error: { message: 'No documents found for this student', code: 'NOT_FOUND' } });
-      }
-      res.json(documents);
+        const documents = await StudentDocument.find({ student: req.params.studentId })
+            .populate('student', 'name matricNumber email');
+        if (!documents.length) {
+            return res.status(404).json({ error: { message: 'No documents found for this student', code: 'NOT_FOUND' } });
+        }
+        res.json(documents);
     } catch (error) {
-      console.error('❌ Error fetching student documents:', error);
-      res.status(500).json({ error: { message: 'Failed to fetch documents', code: 'SERVER_ERROR', details: error.message } });
+        console.error('❌ Error fetching student documents:', error);
+        res.status(500).json({ error: { message: 'Failed to fetch documents', code: 'SERVER_ERROR', details: error.message } });
     }
-  });
-  
+});
+
 // Update your download endpoint to force file download
 app.get('/api/student-documents/download/:documentId', verifyToken, isAdmin, async (req, res) => {
     try {
@@ -3719,27 +3797,27 @@ app.get('/api/student-documents/download/:documentId', verifyToken, isAdmin, asy
         res.status(500).json({ error: { message: 'Failed to download document', code: 'SERVER_ERROR', details: error.message } });
     }
 });
-  // Delete a document
-  app.delete('/api/student-documents/:documentId',verifyToken, isAdmin, async (req, res) => {
+// Delete a document
+app.delete('/api/student-documents/:documentId', verifyToken, isAdmin, async (req, res) => {
     try {
-      const document = await StudentDocument.findById(req.params.documentId);
-      if (!document) {
-        return res.status(404).json({ error: { message: 'Document not found', code: 'NOT_FOUND' } });
-      }
-  
-      // Delete from Cloudinary
-      await cloudinary.uploader.destroy(document.publicId, { resource_type: 'image' });
-  
-      // Remove document from User and StudentDocument
-      await User.updateOne({ _id: document.student }, { $pull: { documents: document._id } });
-      await document.deleteOne();
-  
-      res.json({ message: 'Document deleted successfully' });
+        const document = await StudentDocument.findById(req.params.documentId);
+        if (!document) {
+            return res.status(404).json({ error: { message: 'Document not found', code: 'NOT_FOUND' } });
+        }
+
+        // Delete from Cloudinary
+        await cloudinary.uploader.destroy(document.publicId, { resource_type: 'image' });
+
+        // Remove document from User and StudentDocument
+        await User.updateOne({ _id: document.student }, { $pull: { documents: document._id } });
+        await document.deleteOne();
+
+        res.json({ message: 'Document deleted successfully' });
     } catch (error) {
-      console.error('❌ Error deleting document:', error);
-      res.status(500).json({ error: { message: 'Failed to delete document', code: 'SERVER_ERROR', dxetails: error.message } });
-    } 
-  });
+        console.error('❌ Error deleting document:', error);
+        res.status(500).json({ error: { message: 'Failed to delete document', code: 'SERVER_ERROR', dxetails: error.message } });
+    }
+});
 
 // Updated download route
 app.get('/api/student-documents/:documentId/download', verifyToken, isAdmin, async (req, res) => {
